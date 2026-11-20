@@ -31,8 +31,8 @@ cd forgejo-deploy
 ./setup.sh
 
 # 2. Iniciar el servicio y crear el administrador:
-rc-service forgejo start
-./scripts/manage.sh create-admin
+./manage.py start       # O también: ./manage.sh start / rc-service forgejo start
+./manage.py create-admin
 
 # 3. Migrar datos desde GitBucket (opcional):
 ./migrate.sh
@@ -40,15 +40,23 @@ rc-service forgejo start
 
 ### Operaciones y Mantenimiento:
 ```bash
+# Ayuda y lista de todos los comandos disponibles:
+./manage.py --help
+
+# Diagnóstico integral del sistema (cgroups, runtime, permisos):
+./manage.py doctor
+
 # Estado detallado de los contenedores:
-./scripts/manage.sh status
+./manage.py status
+
+# Corregir permisos de volúmenes si cambias de usuario:
+./manage.py fix-permissions
 
 # Actualizar versión de Forgejo (detección en vivo + backup preventivo):
-./scripts/manage.sh upgrade
+./manage.py upgrade
 
 # Desinstalar y revertir todas las modificaciones del sistema:
-./setup.sh --revert
-# (O mediante manage.sh): ./scripts/manage.sh uninstall
+./manage.py uninstall   # O: ./setup.sh --revert
 ```
 
 ### Documentación en Español:

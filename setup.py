@@ -62,11 +62,21 @@ STRINGS: Dict[str, Dict[str, str]] = {
         "prompt_ssh_bind": "IP de enlace para SSH Git",
         "prompt_domain": "Introduce el dominio público de Forgejo",
         "prompt_host": "Introduce la IP o hostname del servidor",
+        "info_web_title": "GUÍA DE RED: PUERTO HTTP Y BIND IP",
+        "info_web_p1": "• Puerto HTTP (3000): Puerto TCP donde escuchará la web de Forgejo.",
+        "info_web_p2": "• Bind IP 0.0.0.0 (Todas las IPs): Permite acceso directo desde otros PCs en tu red LAN.",
+        "info_web_p3": "• Bind IP 127.0.0.1 (Solo Localhost): Recomendado si usas Apache/Nginx como reverse proxy SSL.",
+        "info_web_p4": "• Puerto SSH Git (2222): Puerto para Git sobre SSH (se usa 2222 para no colisionar con el puerto SSH 22 de Gentoo).",
         "port_privileged_warn": "Aviso: El puerto {port} es < 1024. En modo Rootless puede requerir sysctl net.ipv4.ip_unprivileged_port_start.",
         "port_invalid": "Puerto no válido. Utilizando valor predeterminado: {default}",
         "desc_direct": "Acceso Directo ({url})",
         "desc_apache": "Subdominio Apache ({url})",
         "step_db_title": "Base de Datos PostgreSQL (Puertos y Conexión)",
+        "info_db_title": "GUÍA DE RED: POSTGRESQL 18 EN EL HOST",
+        "info_db_p1": "• Puerto PostgreSQL (5432): Puerto donde la base de datos expone su servicio hacia el host.",
+        "info_db_p2": "• Conflicto: Si tu servidor ya tiene un PostgreSQL nativo en el puerto 5432, cámbialo a 5433 para evitar errores.",
+        "info_db_p3": "• Bind IP 127.0.0.1 (Recomendado Zero Trust): Aísla la BD del exterior; Forgejo se conecta por la red interna.",
+        "info_db_p4": "• Bind IP 0.0.0.0: Solo si necesitas conectar herramientas externas (DBeaver/pgAdmin) desde otro PC.",
         "step_db_opt1": "Local en Contenedor (PostgreSQL 18 en este servidor)",
         "step_db_opt2": "Host / Túnel SSH Existente (PostgreSQL ya disponible en host.containers.internal:5432)",
         "step_db_opt3": "Remota en otro servidor (Conectar por IP directa o crear un túnel SSH nuevo)",
@@ -98,8 +108,13 @@ STRINGS: Dict[str, Dict[str, str]] = {
         "env_saved": "Archivo .env generado y protegido con permisos 0600.",
         "prompt_openrc": "¿Deseas instalar el servicio OpenRC para arranque del sistema ahora? [S/n]",
         "openrc_user_title": "Seguridad y Usuario del Servicio (Podman Rootless)",
-        "openrc_user_opt1": "Crear usuario de sistema dedicado sin login ('forgejo') [Recomendado]",
-        "openrc_user_opt2": "Usar un usuario existente del sistema (ej. {user})",
+        "info_user_title": "GUÍA DE SEGURIDAD: USUARIO EJECUTOR (PODMAN ROOTLESS)",
+        "info_user_p1": "• Opción 1: Usuario de sistema dedicado 'forgejo' (UID 999).",
+        "info_user_p2": "  Aislamiento estricto de producción. Gestión mediante OpenRC (rc-service forgejo start).",
+        "info_user_p3": "• Opción 2: Tu usuario actual ({user}).",
+        "info_user_p4": "  Recomendado si quieres usar 'podman-compose up' o './manage.py start' desde tu terminal.",
+        "openrc_user_opt1": "Crear usuario de sistema dedicado sin login ('forgejo')",
+        "openrc_user_opt2": "Usar tu usuario del sistema (ej. {user}) [Recomendado para consola/desarrollo]",
         "openrc_user_choice": "Selecciona opción de usuario [1/2]",
         "openrc_user_input": "Nombre de usuario del sistema",
         "user_created": "Usuario de sistema '{user}' creado exitosamente (home: {home}, shell: /sbin/nologin).",
@@ -129,6 +144,7 @@ STRINGS: Dict[str, Dict[str, str]] = {
         "footer_logs": "Ver registros:",
         "footer_admin": "Crear admin:",
         "footer_upgrade": "Actualizar versión:",
+        "footer_doctor": "Diagnóstico de salud:",
         "footer_uninstall": "Desinstalar o revertir:",
         "footer_migrate": "Para importar datos desde plataformas externas, ejecuta:",
         # Reversión / Rollback
@@ -169,11 +185,21 @@ STRINGS: Dict[str, Dict[str, str]] = {
         "prompt_ssh_bind": "Git SSH bind IP",
         "prompt_domain": "Enter the public domain for Forgejo",
         "prompt_host": "Enter server IP or hostname",
+        "info_web_title": "NETWORK GUIDE: HTTP PORT & BIND IP",
+        "info_web_p1": "• HTTP Port (default 3000): TCP port for Forgejo's web UI and HTTP Git access.",
+        "info_web_p2": "• Bind IP 0.0.0.0 (All Interfaces): Allows direct network access from any client in your LAN.",
+        "info_web_p3": "• Bind IP 127.0.0.1 (Localhost Only): Recommended when fronting Forgejo with an Apache/Nginx SSL proxy.",
+        "info_web_p4": "• SSH Git Port (default 2222): Avoids collision with standard SSH port 22 of Gentoo host OS.",
         "port_privileged_warn": "Warning: Port {port} is < 1024. In Rootless mode it may require sysctl net.ipv4.ip_unprivileged_port_start.",
         "port_invalid": "Invalid port. Using default: {default}",
         "desc_direct": "Direct Port Access ({url})",
         "desc_apache": "Apache Subdomain ({url})",
         "step_db_title": "PostgreSQL Database (Ports & Connection)",
+        "info_db_title": "NETWORK GUIDE: POSTGRESQL 18 ON HOST",
+        "info_db_p1": "• PostgreSQL Port (5432): Host TCP port where the containerized database listens.",
+        "info_db_p2": "• Port Conflicts: If your host already runs PostgreSQL on 5432, change this to 5433 to avoid conflicts.",
+        "info_db_p3": "• Bind IP 127.0.0.1 (Zero Trust): Isolates DB from external network; Forgejo talks via internal Podman bridge.",
+        "info_db_p4": "• Bind IP 0.0.0.0: Only needed if external DB clients (DBeaver/pgAdmin) on other machines must connect.",
         "step_db_opt1": "Local in Container (PostgreSQL 18 on this server)",
         "step_db_opt2": "Host / Existing SSH Tunnel (PostgreSQL already available on host.containers.internal:5432)",
         "step_db_opt3": "Remote on another server (Connect via direct network IP or create a new SSH tunnel)",
@@ -205,8 +231,13 @@ STRINGS: Dict[str, Dict[str, str]] = {
         "env_saved": ".env file created and secured with 0600 permissions.",
         "prompt_openrc": "Do you want to install OpenRC service for system boot now? [Y/n]",
         "openrc_user_title": "Security & Service User (Rootless Podman)",
-        "openrc_user_opt1": "Create dedicated system user without login ('forgejo') [Recommended]",
-        "openrc_user_opt2": "Use an existing system user (e.g. {user})",
+        "info_user_title": "SECURITY GUIDE: SERVICE EXECUTION USER (PODMAN ROOTLESS)",
+        "info_user_p1": "• Option 1: Dedicated system user 'forgejo' (UID 999).",
+        "info_user_p2": "  Strict isolation for servers. Managed via OpenRC service ('rc-service forgejo start').",
+        "info_user_p3": "• Option 2: Current user ({user}).",
+        "info_user_p4": "  Recommended for running 'podman-compose up' or './manage.py start' directly in user terminal.",
+        "openrc_user_opt1": "Create dedicated system user without login ('forgejo')",
+        "openrc_user_opt2": "Use your system user (e.g. {user}) [Recommended for console/development]",
         "openrc_user_choice": "Select user option [1/2]",
         "openrc_user_input": "System username",
         "user_created": "System user '{user}' created successfully (home: {home}, shell: /sbin/nologin).",
@@ -236,6 +267,7 @@ STRINGS: Dict[str, Dict[str, str]] = {
         "footer_logs": "View logs:",
         "footer_admin": "Create admin:",
         "footer_upgrade": "Upgrade version:",
+        "footer_doctor": "Health diagnosis:",
         "footer_uninstall": "Uninstall or revert:",
         "footer_migrate": "To import data from external platforms, run:",
         # Reversal / Rollback
@@ -300,6 +332,14 @@ class UI:
             formatted_label = f"  {label}:".ljust(22)
             print(f"{cls.BOLD}{cls.GREEN}│{cls.RESET} {cls.BOLD}{formatted_label}{cls.RESET} {cls.CYAN}{val}{cls.RESET}".ljust(width + 15) + f"{cls.BOLD}{cls.GREEN}│{cls.RESET}")
         print(f"{cls.BOLD}{cls.GREEN}└{'─' * (width - 2)}┘{cls.RESET}\n")
+
+    @classmethod
+    def info_box(cls, title: str, lines: List[str]) -> None:
+        width = 74
+        print(f"\n {cls.BOLD}{cls.CYAN}┌── ℹ {title} {'─' * max(2, width - len(title) - 8)}┐{cls.RESET}")
+        for line in lines:
+            print(f" {cls.CYAN}│{cls.RESET}  {line}")
+        print(f" {cls.BOLD}{cls.CYAN}└{'─' * (width - 2)}┘{cls.RESET}\n")
 
     @classmethod
     def ok(cls, msg: str) -> None:
@@ -519,6 +559,17 @@ def configure_web_access() -> Tuple[str, int, str, int, str, str, str]:
 
     choice = UI.prompt(UI.t("prompt_web_choice"), default="1")
 
+    # Información pedagógica sobre puertos e IPs
+    UI.info_box(
+        UI.t("info_web_title"),
+        [
+            UI.t("info_web_p1"),
+            UI.t("info_web_p2"),
+            UI.t("info_web_p3"),
+            UI.t("info_web_p4"),
+        ],
+    )
+
     # Puertos e IPs de bind
     if choice == "2":
         default_http_bind = "127.0.0.1"
@@ -600,6 +651,18 @@ def configure_database() -> Tuple[str, str, str, str, str, str, str, int, bool, 
         db_mode = "local"
         profiles = "local-db"
         db_host = "db:5432"
+
+        # Información pedagógica sobre puertos e IPs de PostgreSQL
+        UI.info_box(
+            UI.t("info_db_title"),
+            [
+                UI.t("info_db_p1"),
+                UI.t("info_db_p2"),
+                UI.t("info_db_p3"),
+                UI.t("info_db_p4"),
+            ],
+        )
+
         # Permitir elegir el puerto y bind IP de PostgreSQL en el host
         pg_port = _prompt_port(UI.t("prompt_pg_port"), default=5432)
         pg_bind_ip = UI.prompt(UI.t("prompt_pg_bind"), default="127.0.0.1")
@@ -658,43 +721,67 @@ def configure_forgejo_version() -> Tuple[str, str]:
     return chosen_version, desc
 
 
-def install_openrc_service(base_dir: Path) -> str:
-    """Configura el demonio OpenRC con desescalado seguro a usuario sin privilegios."""
+def configure_service_user(base_dir: Path, caller_user: str, caller_uid: int, caller_gid: int) -> Tuple[str, int, int]:
+    """Pregunta y configura el usuario ejecutor de Podman y los permisos de volúmenes."""
+    UI.section(UI.t("openrc_user_title"), "Seguridad")
+
+    # Información pedagógica sobre el usuario ejecutor
+    UI.info_box(
+        UI.t("info_user_title"),
+        [
+            UI.t("info_user_p1"),
+            UI.t("info_user_p2"),
+            UI.t("info_user_p3", user=caller_user),
+            UI.t("info_user_p4"),
+        ],
+    )
+
+    print(f" {UI.CYAN}1){UI.RESET} {UI.BOLD}{UI.t('openrc_user_opt1')}{UI.RESET}")
+    print(f" {UI.CYAN}2){UI.RESET} {UI.BOLD}{UI.t('openrc_user_opt2', user=caller_user)}{UI.RESET}")
+    UI.end_section()
+
+    user_choice = UI.prompt(UI.t("openrc_user_choice"), default="2")
+    if user_choice == "1":
+        selected_user = "forgejo"
+        _create_system_user("forgejo")
+    else:
+        selected_user = caller_user
+        _ensure_subids(selected_user)
+
+    # Obtener UID y GID reales del usuario seleccionado
+    try:
+        u_info = subprocess.run(["id", "-u", selected_user], capture_output=True, text=True, check=True)
+        g_info = subprocess.run(["id", "-g", selected_user], capture_output=True, text=True, check=True)
+        selected_uid = int(u_info.stdout.strip())
+        selected_gid = int(g_info.stdout.strip())
+    except Exception:
+        selected_uid = caller_uid
+        selected_gid = caller_gid
+
+    # Ajustar permisos para que el usuario sin privilegios pueda escribir en ./data y ./postgres
+    if selected_user != "root":
+        data_dir = base_dir / "data"
+        pg_dir = base_dir / "postgres"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        pg_dir.mkdir(parents=True, exist_ok=True)
+        _run_privileged(["chown", "-R", f"{selected_user}:{selected_user}", str(data_dir), str(pg_dir)])
+        _run_privileged(["chmod", "0700", str(data_dir), str(pg_dir)])
+
+    return selected_user, selected_uid, selected_gid
+
+
+def install_openrc_service(base_dir: Path, selected_user: str) -> bool:
+    """Configura el demonio OpenRC con desescalado seguro al usuario seleccionado."""
     init_src = base_dir / "scripts" / "forgejo.initd"
     init_dst = Path("/etc/init.d/forgejo")
     conf_dst = Path("/etc/conf.d/forgejo")
 
     if not init_src.exists():
-        return ""
+        return False
 
     choice = UI.prompt(f"\n{UI.t('prompt_openrc')}", default="S" if UI.lang == "es" else "Y").lower()
     if not (choice.startswith("s") or choice.startswith("y")):
-        return ""
-
-    # Detección de usuario invocador
-    caller_user = os.environ.get("SUDO_USER") or getpass.getuser()
-    if caller_user == "root":
-        try:
-            caller_user = base_dir.owner()
-        except Exception:
-            caller_user = "forgejo"
-
-    UI.section(UI.t("openrc_user_title"), "OpenRC")
-    print(f" {UI.CYAN}1){UI.RESET} {UI.BOLD}{UI.t('openrc_user_opt1')}{UI.RESET}")
-    print(f" {UI.CYAN}2){UI.RESET} {UI.BOLD}{UI.t('openrc_user_opt2', user=caller_user)}{UI.RESET}")
-    UI.end_section()
-
-    user_choice = UI.prompt(UI.t("openrc_user_choice"), default="1")
-    if user_choice == "2":
-        selected_user = UI.prompt(UI.t("openrc_user_input"), default=caller_user)
-        _ensure_subids(selected_user)
-    else:
-        selected_user = "forgejo"
-        _create_system_user("forgejo")
-
-    # Ajustar permisos para que el usuario sin privilegios pueda escribir en ./data y ./postgres
-    if selected_user != "root":
-        _run_privileged(["chown", "-R", f"{selected_user}:{selected_user}", str(base_dir / "data"), str(base_dir / "postgres")])
+        return False
 
     # Generar /etc/conf.d/forgejo
     conf_content = f"""# /etc/conf.d/forgejo - Configuración generada por setup.py
@@ -813,6 +900,16 @@ Opciones / Options:
     check_dependencies()
     uid, gid, userns_mode = check_user_and_permissions(base_dir)
 
+    caller_user = os.environ.get("SUDO_USER") or getpass.getuser()
+    if caller_user == "root":
+        try:
+            caller_user = base_dir.owner()
+        except Exception:
+            caller_user = "forgejo"
+
+    # Configuración de usuario ejecutor de Podman y permisos de datos
+    service_user, service_uid, service_gid = configure_service_user(base_dir, caller_user, uid, gid)
+
     env_path = base_dir / ".env"
     if env_path.exists():
         UI.warn(UI.t("env_exists", path=env_path))
@@ -868,6 +965,7 @@ POSTGRES_USER={db_user}
 POSTGRES_PASSWORD={db_pass}
 POSTGRES_BIND_IP={pg_bind_ip}
 POSTGRES_PORT={pg_port}
+PGDATA=/var/lib/postgresql/data/pgdata
 
 # Túnel SSH / SSH Tunnel
 SSH_TUNNEL_ENABLED={"true" if ssh_tunnel else "false"}
@@ -889,8 +987,8 @@ FORGEJO_DOMAIN={domain}
 FORGEJO_ROOT_URL={root_url}
 
 # Usuario y Permisos / Container User
-USER_UID={uid}
-USER_GID={gid}
+USER_UID={service_uid}
+USER_GID={service_gid}
 USERNS_MODE={userns_mode}
 """
     env_path.write_text(env_content, encoding="utf-8")
@@ -898,7 +996,7 @@ USERNS_MODE={userns_mode}
     UI.ok(UI.t("env_saved"))
 
     # 5. Instalación de OpenRC con desescalado
-    service_user = install_openrc_service(base_dir)
+    install_openrc_service(base_dir, service_user)
 
     # 6. Tarjeta de resumen
     summary_rows = [
@@ -916,12 +1014,13 @@ USERNS_MODE={userns_mode}
     UI.card(UI.t("card_title"), summary_rows)
 
     print(f"{UI.BOLD}{UI.t('footer_cmds')}{UI.RESET}")
-    print(f"  • {UI.t('footer_start')}       {UI.CYAN}./scripts/manage.sh start{UI.RESET} (or: {UI.CYAN}rc-service forgejo start{UI.RESET})")
-    print(f"  • {UI.t('footer_status')}         {UI.CYAN}./scripts/manage.sh status{UI.RESET}")
-    print(f"  • {UI.t('footer_logs')}           {UI.CYAN}./scripts/manage.sh logs server{UI.RESET}")
-    print(f"  • {UI.t('footer_admin')}          {UI.CYAN}./scripts/manage.sh create-admin{UI.RESET}")
-    print(f"  • {UI.t('footer_upgrade')}        {UI.CYAN}./scripts/manage.sh upgrade{UI.RESET}")
-    print(f"  • {UI.t('footer_uninstall')}      {UI.CYAN}./setup.sh --revert{UI.RESET}")
+    print(f"  • {UI.t('footer_start')}       {UI.CYAN}./manage.py start{UI.RESET} (o: {UI.CYAN}rc-service forgejo start{UI.RESET})")
+    print(f"  • {UI.t('footer_status')}         {UI.CYAN}./manage.py status{UI.RESET}")
+    print(f"  • {UI.t('footer_logs')}           {UI.CYAN}./manage.py logs server{UI.RESET}")
+    print(f"  • {UI.t('footer_admin')}          {UI.CYAN}./manage.py create-admin{UI.RESET}")
+    print(f"  • {UI.t('footer_upgrade')}        {UI.CYAN}./manage.py upgrade{UI.RESET}")
+    print(f"  • {UI.t('footer_doctor')}         {UI.CYAN}./manage.py doctor{UI.RESET}")
+    print(f"  • {UI.t('footer_uninstall')}      {UI.CYAN}./manage.py uninstall{UI.RESET}")
     print(f"\n  {UI.DIM}{UI.t('footer_migrate')}{UI.RESET} {UI.BOLD}{UI.CYAN}./migrate.sh{UI.RESET}\n")
 
 
