@@ -77,6 +77,17 @@ start_pre() {
 
     _resolve_user
     if [ "${FORGEJO_USER}" != "root" ]; then
+        # 1. Asegurar propagación de montajes para Podman Rootless en Gentoo
+        mount --make-rshared / 2>/dev/null || true
+
+        # 2. Si root tiene contenedores residuales ocupando los puertos, liberarlos
+        if podman ps -a --format "{{.Names}}" 2>/dev/null | grep -qE "^(forgejo-app|forgejo-db)$"; then
+            ewarn "Detectados contenedores de Forgejo previos ejecutándose como root. Liberando puertos..."
+            podman stop -t 5 forgejo-app forgejo-db 2>/dev/null || true
+            podman rm -f forgejo-app forgejo-db 2>/dev/null || true
+        fi
+
+        # 3. Configurar /run/user/<UID> con permisos seguros
         local user_uid
         user_uid=$(id -u "${FORGEJO_USER}" 2>/dev/null)
         if [ -n "${user_uid}" ]; then
@@ -88,13 +99,16 @@ start_pre() {
             fi
         fi
 
-        # Asegurar que el usuario ejecutor pueda leer .env
+        # 4. Asegurar que el usuario ejecutor pueda leer .env
         if [ -f "${FORGEJO_DIR}/.env" ]; then
             if ! runuser -u "${FORGEJO_USER}" -- test -r "${FORGEJO_DIR}/.env" 2>/dev/null; then
                 chown ":${FORGEJO_USER}" "${FORGEJO_DIR}/.env" 2>/dev/null || true
                 chmod 0640 "${FORGEJO_DIR}/.env" 2>/dev/null || true
             fi
         fi
+
+        # 5. Limpiar contenedores con error de red previo en el usuario ejecutor
+        _exec_cmd "podman rm -f forgejo-app forgejo-db 2>/dev/null || true"
     fi
 
     # Comprobar si requiere túnel SSH previo
