@@ -779,6 +779,21 @@ def revert_installation(base_dir: Path) -> None:
 
 
 def main() -> None:
+    # 0. Argumentos rápidos de ayuda
+    if any(arg in ("-h", "--help") for arg in sys.argv[1:]):
+        print("""
+Forgejo Deployment Assistant (Gentoo Linux - Podman Rootless)
+
+Uso / Usage:
+  ./setup.py [OPCIONES / OPTIONS]  (o / or ./setup.sh)
+
+Opciones / Options:
+  -h, --help       Muestra esta ayuda y sale / Show this help and exit
+  --revert         Desinstala el servicio OpenRC y revierte el sistema / Revert OpenRC service
+  --uninstall      Alias de --revert / Alias for --revert
+""")
+        sys.exit(0)
+
     base_dir = Path(__file__).resolve().parent
 
     # 1. Selección de idioma
