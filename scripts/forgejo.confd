@@ -4,8 +4,9 @@
 # ==============================================================================
 
 # Directorio base de la instalación de Forgejo (donde reside compose.yaml)
-# Configurado automáticamente por setup.py (por defecto: /opt/forgejo)
-FORGEJO_DIR="/opt/forgejo"
+# Configurado automáticamente por setup.py a la ruta real del repositorio.
+# Ejemplo: FORGEJO_DIR="/home/usuario/forgejo-deploy" o FORGEJO_DIR="/srv/forgejo"
+FORGEJO_DIR=""
 
 # Usuario del sistema que ejecutará el stack de Podman en modo Rootless.
 # Recomendado: usuario de sistema dedicado sin login 'forgejo' o usuario regular.

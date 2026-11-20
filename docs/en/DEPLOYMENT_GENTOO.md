@@ -23,10 +23,10 @@ emerge --ask www-servers/apache
 
 ## 2. Interactive Setup and Deployment (`setup.py` / `setup.sh`)
 
-1. Clone the repository on your Gentoo server (e.g. `/opt/forgejo` or your preferred directory):
+1. Clone the repository on your Gentoo server (to any directory of your choice, e.g. your home directory or `/srv/forgejo-deploy`):
    ```bash
-   git clone https://github.com/jrubioh1/forgejo-deploy.git /opt/forgejo
-   cd /opt/forgejo
+   git clone https://github.com/jrubioh1/forgejo-deploy.git
+   cd forgejo-deploy
    ```
 
 2. Run the interactive setup assistant (choose language Spanish or English):

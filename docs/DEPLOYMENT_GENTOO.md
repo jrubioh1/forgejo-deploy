@@ -23,10 +23,10 @@ emerge --ask www-servers/apache
 
 ## 2. Preparación y Configuración Inicial (`setup.sh`)
 
-1. Clona el repositorio en el servidor Gentoo (por ejemplo en `/opt/forgejo` o en tu directorio preferido):
+1. Clona el repositorio en el servidor Gentoo (en cualquier directorio de tu preferencia, ej. en tu home o `/srv/forgejo-deploy`):
    ```bash
-   git clone https://github.com/jrubioh1/forgejo-deploy.git /opt/forgejo
-   cd /opt/forgejo
+   git clone https://github.com/jrubioh1/forgejo-deploy.git
+   cd forgejo-deploy
    ```
 
 2. Ejecuta el asistente interactivo:
@@ -134,9 +134,9 @@ Para programar un volcado consistente diario a las 03:00 AM:
 crontab -e
 ```
 
-Añade la siguiente línea:
+Añade una línea indicando la ruta absoluta donde clonaste el repositorio (ej. `/home/usuario/forgejo-deploy` o `/srv/forgejo-deploy`):
 ```cron
-0 3 * * * /opt/forgejo/scripts/manage.sh backup > /var/log/forgejo-backup.log 2>&1
+0 3 * * * /ruta/absoluta/a/forgejo-deploy/scripts/manage.sh backup > /var/log/forgejo-backup.log 2>&1
 ```
 
 Los respaldos se almacenarán comprimidos en `./backups/` con fecha y hora.

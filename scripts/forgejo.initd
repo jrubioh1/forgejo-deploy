@@ -8,8 +8,8 @@ description="Servicio y Stack de Forgejo (Podman & PostgreSQL)"
 extra_commands="status_detail"
 description_status_detail="Muestra el estado detallado de salud de los contenedores"
 
-# Valores por defecto (sobrescribibles en /etc/conf.d/forgejo)
-FORGEJO_DIR="${FORGEJO_DIR:-/opt/forgejo}"
+# Valores configurables en /etc/conf.d/forgejo
+FORGEJO_DIR="${FORGEJO_DIR:-}"
 FORGEJO_USER="${FORGEJO_USER:-}"
 
 depend() {
@@ -29,6 +29,11 @@ _resolve_user() {
 
 _exec_cmd() {
     local cmd="$1"
+    if [ -z "${FORGEJO_DIR}" ] || [ ! -d "${FORGEJO_DIR}" ]; then
+        eerror "Directorio FORGEJO_DIR no configurado o no existe: '${FORGEJO_DIR}'"
+        eerror "Define FORGEJO_DIR en /etc/conf.d/forgejo o ejecuta ./setup.sh"
+        return 1
+    fi
     cd "${FORGEJO_DIR}" || return 1
     _resolve_user
 
@@ -59,8 +64,9 @@ _exec_cmd() {
 }
 
 start_pre() {
-    if [ ! -d "${FORGEJO_DIR}" ]; then
-        eerror "El directorio de Forgejo no existe: ${FORGEJO_DIR}"
+    if [ -z "${FORGEJO_DIR}" ] || [ ! -d "${FORGEJO_DIR}" ]; then
+        eerror "Directorio FORGEJO_DIR no configurado o no existe: '${FORGEJO_DIR}'"
+        eerror "Define FORGEJO_DIR en /etc/conf.d/forgejo o ejecuta ./setup.sh"
         return 1
     fi
 
