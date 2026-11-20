@@ -992,7 +992,11 @@ USER_GID={service_gid}
 USERNS_MODE={userns_mode}
 """
     env_path.write_text(env_content, encoding="utf-8")
-    env_path.chmod(0o600)
+    if service_user and service_user != caller_user and service_user != "root":
+        _run_privileged(["chown", f"{caller_user}:{service_user}", str(env_path)])
+        _run_privileged(["chmod", "640", str(env_path)])
+    else:
+        env_path.chmod(0o600)
     UI.ok(UI.t("env_saved"))
 
     # 5. Instalación de OpenRC con desescalado

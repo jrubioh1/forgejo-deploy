@@ -87,6 +87,14 @@ start_pre() {
                 chmod 0700 "${runtime_dir}"
             fi
         fi
+
+        # Asegurar que el usuario ejecutor pueda leer .env
+        if [ -f "${FORGEJO_DIR}/.env" ]; then
+            if ! runuser -u "${FORGEJO_USER}" -- test -r "${FORGEJO_DIR}/.env" 2>/dev/null; then
+                chown ":${FORGEJO_USER}" "${FORGEJO_DIR}/.env" 2>/dev/null || true
+                chmod 0640 "${FORGEJO_DIR}/.env" 2>/dev/null || true
+            fi
+        fi
     fi
 
     # Comprobar si requiere túnel SSH previo

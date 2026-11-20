@@ -198,6 +198,16 @@ def cmd_fix_permissions(args: argparse.Namespace) -> None:
 
     run_privileged(["chmod", "0700", str(data_dir), str(pg_dir)])
 
+    # Ajustar .env para que target_user pueda leerlo
+    env_file = BASE_DIR / ".env"
+    if env_file.exists():
+        current_user = getpass.getuser()
+        if target_user != current_user and target_user != "root":
+            run_privileged(["chown", f"{current_user}:{target_user}", str(env_file)])
+            run_privileged(["chmod", "0640", str(env_file)])
+        else:
+            run_privileged(["chmod", "0600", str(env_file)])
+
     # Si hay SELinux activo, aplicar contextos
     if shutil.which("chcon"):
         run_privileged(["chcon", "-Rt", "container_file_t", str(data_dir), str(pg_dir)])
