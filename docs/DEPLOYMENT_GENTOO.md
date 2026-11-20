@@ -157,3 +157,24 @@ El asistente realiza automáticamente:
 3. **Backup Preventivo Obligatorio:** Realiza un volcado consistente en `./backups/` antes de tocar nada. Si el backup falla, la actualización se aborta.
 4. **Pre-Pull:** Descarga la nueva imagen OCI mediante `podman pull` mientras el servicio sigue activo en producción.
 5. **Recreación y Auto-Migración:** Modifica `FORGEJO_VERSION` en `.env` (guardando `.env.bak`), ejecuta `podman-compose up -d` y verifica que las migraciones concluyan con éxito.
+
+---
+
+## 9. Configuración Avanzada y Archivo `app.ini`
+
+### Ubicación Física en el Host
+El archivo principal de configuración de Forgejo se encuentra directamente en el sistema de archivos de tu host en:
+```bash
+./data/custom/conf/app.ini
+```
+
+### Precedencia de Configuración (Variables de Entorno vs `app.ini`)
+* **Parámetros en `.env` (Puertos, Bind IP, Base de Datos, ROOT_URL):** Tienen prioridad máxima en Forgejo y sobreescriben `app.ini` durante el arranque del contenedor.
+* **Ajustes avanzados en `app.ini`:** Todo lo que no esté en `.env` (deshabilitar registro público de usuarios, cuotas de repositorios, servidor SMTP, OAuth2, avatares, etc.) se edita directamente en este archivo.
+* Puedes inspeccionarlo o abrirlo en tu editor ejecutando:
+  ```bash
+  ./manage.py config           # Muestra rutas y variables
+  ./manage.py config --show    # Muestra el contenido de app.ini en terminal
+  ./manage.py config --edit    # Abre app.ini con el editor del sistema
+  ```
+* Tras guardar los cambios, reinicia el servicio con `./manage.py restart`.

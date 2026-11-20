@@ -638,6 +638,39 @@ def cmd_clean_images(args: argparse.Namespace) -> None:
     UI.info("La próxima vez que ejecutes './manage.py start', Podman volverá a descargarlas automáticamente.")
 
 
+def cmd_config(args: argparse.Namespace) -> None:
+    """Muestra información y ubicación de los archivos de configuración (.env y app.ini)."""
+    UI.header("CONFIGURACIÓN DE FORGEJO (ENTORNO Y APP.INI)")
+    env_file = BASE_DIR / ".env"
+    ini_file = BASE_DIR / "data" / "custom" / "conf" / "app.ini"
+
+    UI.section("1. Variables de Despliegue (.env)")
+    print(f"  Ruta física en el host: {UI.BOLD}{UI.CYAN}{env_file}{UI.RESET}")
+    print("  Gestiona: Puertos, IP de bind, tipo de base de datos, contraseñas y ROOT_URL.")
+    print(f"  {UI.DIM}Nota: Las variables de .env tienen prioridad máxima al arrancar el contenedor.{UI.RESET}\n")
+
+    UI.section("2. Archivo de Configuración de Forgejo (app.ini)")
+    print(f"  Ruta física en el host: {UI.BOLD}{UI.CYAN}{ini_file}{UI.RESET}")
+    print("  Gestiona: Registro público de usuarios, correo SMTP, límites LFS, OAuth2, cuotas, etc.")
+    print(f"  {UI.DIM}Nota: Es un archivo en el host; puedes editarlo directamente con nano/vim.{UI.RESET}\n")
+
+    if getattr(args, "edit", False):
+        editor = os.environ.get("EDITOR") or shutil.which("nano") or shutil.which("vim") or "nano"
+        subprocess.run([editor, str(ini_file)])
+        UI.info("Recuerda reiniciar el servicio para aplicar cambios: ./manage.py restart")
+    elif getattr(args, "show", False):
+        if ini_file.exists():
+            try:
+                print(ini_file.read_text(encoding="utf-8"))
+            except OSError as e:
+                UI.err(f"No se pudo leer app.ini (comprueba permisos): {e}")
+        else:
+            UI.warn("app.ini aún no ha sido generado (inicia Forgejo una vez con './manage.py start').")
+    else:
+        print(f"  {UI.DIM}Para abrirlo en tu editor ejecuta:{UI.RESET} {UI.BOLD}{UI.CYAN}./manage.py config --edit{UI.RESET}")
+        print(f"  {UI.DIM}Para ver el contenido actual:{UI.RESET}     {UI.BOLD}{UI.CYAN}./manage.py config --show{UI.RESET}\n")
+
+
 def cmd_doctor(args: argparse.Namespace) -> None:
     """Ejecuta una batería completa de diagnósticos del entorno Gentoo y Rootless Podman."""
     UI.header("DIAGNÓSTICO DEL SISTEMA Y ENTORNO (DOCTOR)")
@@ -818,6 +851,11 @@ def create_parser() -> argparse.ArgumentParser:
     # clean-images
     subparsers.add_parser("clean-images", help="Elimina las imágenes locales de Forgejo y PostgreSQL para liberar espacio")
 
+    # config
+    p_cfg = subparsers.add_parser("config", help="Muestra rutas y opciones de configuración (.env y app.ini)")
+    p_cfg.add_argument("-e", "--edit", action="store_true", help="Abre app.ini con el editor de texto del sistema")
+    p_cfg.add_argument("-s", "--show", action="store_true", help="Muestra el contenido de app.ini en terminal")
+
     # podman
     p_podman = subparsers.add_parser("podman", help="Passthrough directo a Podman en el almacenamiento del usuario de servicio")
     p_podman.add_argument("podman_args", nargs=argparse.REMAINDER, help="Argumentos pasados directamente a podman")
@@ -849,7 +887,7 @@ def main() -> None:
     # Ej: forgejo admin user list
     known_commands = {
         "start", "stop", "down", "restart", "status", "logs", "backup",
-        "create-admin", "upgrade", "fix-permissions", "doctor",
+        "create-admin", "upgrade", "fix-permissions", "doctor", "config",
         "prune", "clean-images", "podman", "cli", "install-cli",
         "uninstall", "revert", "-h", "--help",
     }
@@ -882,6 +920,7 @@ def main() -> None:
         "upgrade": cmd_upgrade,
         "fix-permissions": cmd_fix_permissions,
         "doctor": cmd_doctor,
+        "config": cmd_config,
         "prune": cmd_prune,
         "clean-images": cmd_clean_images,
         "podman": cmd_podman,

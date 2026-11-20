@@ -49,6 +49,9 @@ cd forgejo-deploy
 # Estado detallado de los contenedores y uso de almacenamiento:
 ./manage.py status
 
+# Ver rutas de configuración (.env y app.ini en el host) o editar app.ini:
+./manage.py config       # Añade --show para ver contenido o --edit para abrirlo
+
 # Detener y destruir contenedores OCI (datos en ./data y ./postgres intactos):
 ./manage.py down
 
