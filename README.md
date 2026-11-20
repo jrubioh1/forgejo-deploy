@@ -46,8 +46,21 @@ cd forgejo-deploy
 # Diagnóstico integral del sistema (cgroups, runtime, permisos):
 ./manage.py doctor
 
-# Estado detallado de los contenedores:
+# Estado detallado de los contenedores y uso de almacenamiento:
 ./manage.py status
+
+# Detener y destruir contenedores OCI (datos en ./data y ./postgres intactos):
+./manage.py down
+
+# Limpiar contenedores detenidos, capas y redes huérfanas:
+./manage.py prune        # Añade --all para incluir imágenes sin usar
+
+# Eliminar imágenes locales de Forgejo y Postgres para liberar espacio (~1.5 GB):
+./manage.py clean-images
+
+# Passthrough directo a cualquier comando Podman en el almacenamiento de forgejo:
+./manage.py podman ps -a
+./manage.py podman system df
 
 # Instalar el comando global 'forgejo' en el sistema (/usr/local/bin/forgejo):
 ./manage.py install-cli

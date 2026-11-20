@@ -274,6 +274,32 @@ def cmd_fix_permissions(args: argparse.Namespace) -> None:
     UI.info("Ahora puedes iniciar el stack con: ./manage.py start")
 
 
+def wait_for_http_ready(url: str, timeout: int = 15) -> bool:
+    """Espera activamente a que Forgejo responda HTTP 200/301/302 tras arrancar."""
+    curl_bin = shutil.which("curl")
+    if not curl_bin:
+        return False
+    start_time = time.time()
+    sys.stdout.write(" Esperando inicialización del servidor Forgejo")
+    sys.stdout.flush()
+    while time.time() - start_time < timeout:
+        res = subprocess.run(
+            [curl_bin, "-s", "-o", "/dev/null", "-w", "%{http_code}", url],
+            capture_output=True,
+            text=True,
+        )
+        if res.stdout.strip() in ("200", "301", "302"):
+            sys.stdout.write(" [Listo]\n")
+            sys.stdout.flush()
+            return True
+        sys.stdout.write(".")
+        sys.stdout.flush()
+        time.sleep(1)
+    sys.stdout.write(" [Iniciando en segundo plano]\n")
+    sys.stdout.flush()
+    return False
+
+
 def cmd_start(args: argparse.Namespace) -> None:
     """Inicia el stack de contenedores de Forgejo."""
     env = load_env()
@@ -305,9 +331,33 @@ def cmd_start(args: argparse.Namespace) -> None:
         UI.err("Falló el arranque con podman-compose up -d.")
         sys.exit(1)
 
-    # Mostrar estado breve
+    # Espera activa para que el usuario no vea código 000 engañoso
+    http_port = env.get("FORGEJO_HTTP_PORT", "3000")
+    bind_ip = env.get("FORGEJO_BIND_IP", "0.0.0.0")
+    test_ip = "127.0.0.1" if bind_ip in ("0.0.0.0", "127.0.0.1") else bind_ip
+    test_url = f"http://{test_ip}:{http_port}/"
+    wait_for_http_ready(test_url, timeout=12)
+
+    # Mostrar estado detallado
     print("")
     cmd_status(args)
+
+
+def cmd_down(args: argparse.Namespace) -> None:
+    """Detiene y elimina los contenedores y la red de Forgejo sin tocar los datos."""
+    UI.info("Deteniendo y eliminando contenedores y red de Forgejo...")
+    env = load_env()
+    try:
+        run_cmd(["podman-compose", "down", "--timeout", "30"])
+    except subprocess.CalledProcessError:
+        pass
+    run_cmd(["podman", "rm", "-f", "forgejo-app", "forgejo-db"], check=False)
+    if env.get("SSH_TUNNEL_ENABLED", "false").lower() == "true":
+        tunnel_sh = SCRIPTS_DIR / "tunnel-db.sh"
+        if tunnel_sh.exists():
+            subprocess.run([str(tunnel_sh), "stop"])
+    UI.ok("Contenedores 'forgejo-app' y 'forgejo-db' eliminados. Puertos y memoria liberados.")
+    UI.info("Tus repositorios y base de datos en ./data y ./postgres siguen 100% intactos.")
 
 
 def cmd_stop(args: argparse.Namespace) -> None:
@@ -393,6 +443,10 @@ def cmd_status(args: argparse.Namespace) -> None:
             UI.warn(f"Forgejo aún no responde en {test_url} (Código: {code or 'Sin respuesta'})")
     else:
         UI.info(f"Accede a Forgejo en: {test_url}")
+
+    # Almacenamiento y Recursos OCI Podman
+    UI.section("Almacenamiento y Recursos OCI (Usuario de Servicio)")
+    run_cmd(["podman", "system", "df"], check=False)
     print("")
 
 
@@ -519,6 +573,69 @@ def cmd_cli(args: argparse.Namespace) -> None:
         run_cmd(cmd, check=False)
     except subprocess.CalledProcessError:
         pass
+
+
+def cmd_podman(args: argparse.Namespace) -> None:
+    """Ejecuta cualquier comando Podman nativo en el espacio de almacenamiento del usuario forgejo."""
+    if not args.podman_args:
+        run_cmd(["podman", "ps", "-a"], check=False)
+        return
+    cmd = ["podman"] + args.podman_args
+    try:
+        run_cmd(cmd, check=False)
+    except subprocess.CalledProcessError:
+        pass
+
+
+def cmd_prune(args: argparse.Namespace) -> None:
+    """Limpia contenedores detenidos, redes huérfanas y capas sin usar."""
+    UI.header("LIMPIEZA DE OBJETOS PODMAN HUÉRFANOS (PRUNE)")
+    if args.all:
+        UI.warn("Modo --all activo: también se eliminarán imágenes no usadas por contenedores activos.")
+        confirm = input(" ¿Deseas continuar? [s/N]: ").strip().lower()
+        if not (confirm.startswith("s") or confirm.startswith("y")):
+            UI.info("Operación cancelada.")
+            return
+        cmd = ["podman", "system", "prune", "-a", "--force"]
+    else:
+        cmd = ["podman", "system", "prune", "--force"]
+
+    UI.info("Ejecutando limpieza en el almacenamiento del usuario de servicio...")
+    try:
+        run_cmd(cmd, check=False)
+        UI.ok("Limpieza completada exitosamente.")
+    except subprocess.CalledProcessError as e:
+        UI.err(f"Error durante prune: {e}")
+
+
+def cmd_clean_images(args: argparse.Namespace) -> None:
+    """Detiene contenedores y elimina las imágenes OCI de Forgejo y Postgres descargadas."""
+    UI.header("LIMPIEZA DE IMÁGENES OCI (FORGEJO Y POSTGRESQL)")
+    UI.warn("Esta acción eliminará las imágenes locales de Forgejo y PostgreSQL para liberar espacio (~1.5 GB).")
+    UI.info("Tus datos y repositorios en ./data y ./postgres NO se verán afectados.")
+    confirm = input(" ¿Deseas detener contenedores y eliminar las imágenes? [s/N]: ").strip().lower()
+    if not (confirm.startswith("s") or confirm.startswith("y")):
+        UI.info("Operación cancelada.")
+        return
+
+    # Detener contenedores primero
+    run_cmd(["podman", "rm", "-f", "forgejo-app", "forgejo-db"], check=False)
+
+    # Listar imágenes para borrar
+    env = load_env()
+    forgejo_ver = env.get("FORGEJO_VERSION", "17-rootless")
+    images_to_remove = [
+        f"codeberg.org/forgejo/forgejo:{forgejo_ver}",
+        "docker.io/library/postgres:18",
+    ]
+    for img in images_to_remove:
+        UI.info(f"Eliminando imagen: {img}")
+        run_cmd(["podman", "rmi", "-f", img], check=False)
+
+    # Limpieza residual
+    run_cmd(["podman", "image", "prune", "-f"], check=False)
+    UI.ok("Imágenes eliminadas y espacio liberado.")
+    UI.info("La próxima vez que ejecutes './manage.py start', Podman volverá a descargarlas automáticamente.")
 
 
 def cmd_doctor(args: argparse.Namespace) -> None:
@@ -664,6 +781,9 @@ def create_parser() -> argparse.ArgumentParser:
     # stop
     subparsers.add_parser("stop", help="Detiene los contenedores con gracia de 30 segundos")
 
+    # down
+    subparsers.add_parser("down", help="Detiene y elimina contenedores y redes OCI (datos en ./data y ./postgres intactos)")
+
     # restart
     subparsers.add_parser("restart", help="Reinicia limpiamente todos los servicios")
 
@@ -691,6 +811,17 @@ def create_parser() -> argparse.ArgumentParser:
     # doctor
     subparsers.add_parser("doctor", help="Diagnóstico integral del kernel Gentoo, cgroups, Podman rootless y permisos")
 
+    # prune
+    p_prune = subparsers.add_parser("prune", help="Limpia contenedores detenidos, redes huérfanas y capas sin usar")
+    p_prune.add_argument("-a", "--all", action="store_true", help="Elimina también imágenes no usadas")
+
+    # clean-images
+    subparsers.add_parser("clean-images", help="Elimina las imágenes locales de Forgejo y PostgreSQL para liberar espacio")
+
+    # podman
+    p_podman = subparsers.add_parser("podman", help="Passthrough directo a Podman en el almacenamiento del usuario de servicio")
+    p_podman.add_argument("podman_args", nargs=argparse.REMAINDER, help="Argumentos pasados directamente a podman")
+
     # cli
     p_cli = subparsers.add_parser("cli", help="Ejecuta comandos internos de la CLI de Forgejo dentro del contenedor")
     p_cli.add_argument("cli_args", nargs=argparse.REMAINDER, help="Argumentos pasados directamente al binario forgejo")
@@ -706,13 +837,21 @@ def create_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    # Soporte para ejecutar comandos nativos de Forgejo como atajo:
-    # Si el usuario ejecuta: ./manage.py admin user list
-    # o ejecuta el wrapper global: forgejo admin user list
+    # 1. Atajo directo para comandos nativos de Podman en el usuario de servicio:
+    # Ej: forgejo ps -a, forgejo images, forgejo rm -f ...
+    podman_direct = {"ps", "images", "rm", "rmi", "inspect", "top", "stats", "system", "volume", "network"}
+    if len(sys.argv) > 1 and sys.argv[1] in podman_direct:
+        cmd = ["podman"] + sys.argv[1:]
+        res = run_cmd(cmd, check=False)
+        sys.exit(res.returncode)
+
+    # 2. Soporte para comandos nativos de Forgejo:
+    # Ej: forgejo admin user list
     known_commands = {
-        "start", "stop", "restart", "status", "logs", "backup",
+        "start", "stop", "down", "restart", "status", "logs", "backup",
         "create-admin", "upgrade", "fix-permissions", "doctor",
-        "cli", "install-cli", "uninstall", "revert", "-h", "--help",
+        "prune", "clean-images", "podman", "cli", "install-cli",
+        "uninstall", "revert", "-h", "--help",
     }
     if len(sys.argv) > 1 and sys.argv[1] not in known_commands and not sys.argv[1].startswith("-"):
         cli_args = sys.argv[1:]
@@ -734,6 +873,7 @@ def main() -> None:
     commands = {
         "start": cmd_start,
         "stop": cmd_stop,
+        "down": cmd_down,
         "restart": cmd_restart,
         "status": cmd_status,
         "logs": cmd_logs,
@@ -742,6 +882,9 @@ def main() -> None:
         "upgrade": cmd_upgrade,
         "fix-permissions": cmd_fix_permissions,
         "doctor": cmd_doctor,
+        "prune": cmd_prune,
+        "clean-images": cmd_clean_images,
+        "podman": cmd_podman,
         "cli": cmd_cli,
         "install-cli": cmd_install_cli,
         "uninstall": cmd_uninstall,
