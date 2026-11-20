@@ -1,0 +1,13 @@
+# /etc/conf.d/forgejo
+# ==============================================================================
+# Configuración del servicio OpenRC para Forgejo en Gentoo Linux
+# ==============================================================================
+
+# Directorio base de la instalación de Forgejo (donde reside compose.yaml)
+# Configurado automáticamente por setup.py (por defecto: /opt/forgejo)
+FORGEJO_DIR="/opt/forgejo"
+
+# Usuario del sistema que ejecutará el stack de Podman en modo Rootless.
+# Recomendado: usuario de sistema dedicado sin login 'forgejo' o usuario regular.
+# Si se deja vacío, OpenRC intentará detectar el propietario de FORGEJO_DIR.
+FORGEJO_USER="forgejo"

@@ -1,0 +1,129 @@
+#!/sbin/openrc-run
+# ==============================================================================
+# /etc/init.d/forgejo - Servicio OpenRC para Forgejo en Gentoo Linux
+# Ejecución segura con desescalado de privilegios a Podman Rootless
+# ==============================================================================
+
+description="Servicio y Stack de Forgejo (Podman & PostgreSQL)"
+extra_commands="status_detail"
+description_status_detail="Muestra el estado detallado de salud de los contenedores"
+
+# Valores por defecto (sobrescribibles en /etc/conf.d/forgejo)
+FORGEJO_DIR="${FORGEJO_DIR:-/opt/forgejo}"
+FORGEJO_USER="${FORGEJO_USER:-}"
+
+depend() {
+    need net localmount
+    after firewall logger
+}
+
+_resolve_user() {
+    if [ -z "${FORGEJO_USER}" ]; then
+        if [ -d "${FORGEJO_DIR}" ]; then
+            FORGEJO_USER="$(stat -c '%U' "${FORGEJO_DIR}" 2>/dev/null || echo "root")"
+        else
+            FORGEJO_USER="root"
+        fi
+    fi
+}
+
+_exec_cmd() {
+    local cmd="$1"
+    cd "${FORGEJO_DIR}" || return 1
+    _resolve_user
+
+    if [ "${FORGEJO_USER}" = "root" ]; then
+        eval "${cmd}"
+    else
+        local user_uid
+        user_uid=$(id -u "${FORGEJO_USER}" 2>/dev/null) || {
+            eerror "No se pudo obtener el UID de ${FORGEJO_USER}"
+            return 1
+        }
+
+        local runtime_dir="/run/user/${user_uid}"
+        if [ ! -d "${runtime_dir}" ]; then
+            mkdir -p "${runtime_dir}"
+            chown "${FORGEJO_USER}:${FORGEJO_USER}" "${runtime_dir}"
+            chmod 0700 "${runtime_dir}"
+        fi
+
+        local user_home
+        user_home="$(getent passwd "${FORGEJO_USER}" | cut -d: -f6)"
+
+        runuser -u "${FORGEJO_USER}" -- env \
+            XDG_RUNTIME_DIR="${runtime_dir}" \
+            HOME="${user_home}" \
+            sh -c "cd '${FORGEJO_DIR}' && ${cmd}"
+    fi
+}
+
+start_pre() {
+    if [ ! -d "${FORGEJO_DIR}" ]; then
+        eerror "El directorio de Forgejo no existe: ${FORGEJO_DIR}"
+        return 1
+    fi
+
+    if [ ! -f "${FORGEJO_DIR}/compose.yaml" ]; then
+        eerror "No se encontró compose.yaml en: ${FORGEJO_DIR}"
+        return 1
+    fi
+
+    _resolve_user
+    if [ "${FORGEJO_USER}" != "root" ]; then
+        local user_uid
+        user_uid=$(id -u "${FORGEJO_USER}" 2>/dev/null)
+        if [ -n "${user_uid}" ]; then
+            local runtime_dir="/run/user/${user_uid}"
+            if [ ! -d "${runtime_dir}" ]; then
+                mkdir -p "${runtime_dir}"
+                chown "${FORGEJO_USER}:${FORGEJO_USER}" "${runtime_dir}"
+                chmod 0700 "${runtime_dir}"
+            fi
+        fi
+    fi
+
+    # Comprobar si requiere túnel SSH previo
+    if [ -f "${FORGEJO_DIR}/.env" ]; then
+        if grep -q "^SSH_TUNNEL_ENABLED=true" "${FORGEJO_DIR}/.env"; then
+            ebegin "Iniciando túnel SSH hacia la base de datos remota"
+            _exec_cmd "${FORGEJO_DIR}/scripts/tunnel-db.sh start"
+            eend $?
+        fi
+    fi
+}
+
+start() {
+    _resolve_user
+    ebegin "Iniciando stack de Forgejo (Usuario: ${FORGEJO_USER})"
+    _exec_cmd "podman-compose up -d"
+    eend $?
+}
+
+stop() {
+    _resolve_user
+    ebegin "Deteniendo stack de Forgejo ordenadamente (timeout: 30s)"
+    _exec_cmd "podman-compose down --timeout 30"
+    local rc=$?
+
+    # Si había túnel SSH, detenerlo tras bajar los contenedores
+    if [ -f "${FORGEJO_DIR}/.env" ]; then
+        if grep -q "^SSH_TUNNEL_ENABLED=true" "${FORGEJO_DIR}/.env"; then
+            ebegin "Deteniendo túnel SSH de base de datos"
+            _exec_cmd "${FORGEJO_DIR}/scripts/tunnel-db.sh stop"
+            eend $?
+        fi
+    fi
+
+    eend ${rc}
+}
+
+status() {
+    _resolve_user
+    _exec_cmd "podman-compose ps"
+}
+
+status_detail() {
+    _resolve_user
+    _exec_cmd "${FORGEJO_DIR}/scripts/manage.sh status"
+}

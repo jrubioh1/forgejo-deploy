@@ -1,0 +1,64 @@
+networks:
+  forgejo-net:
+    driver: bridge
+
+services:
+  db:
+    image: docker.io/library/postgres:18
+    container_name: forgejo-db
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    profiles:
+      - local-db
+    stop_grace_period: 30s
+    networks:
+      - forgejo-net
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./postgres:/var/lib/postgresql/data:Z
+    ports:
+      - "${POSTGRES_BIND_IP:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    image: codeberg.org/forgejo/forgejo:${FORGEJO_VERSION:-17-rootless}
+    container_name: forgejo-app
+    restart: unless-stopped
+    stop_grace_period: 30s
+    userns_mode: ${USERNS_MODE:-keep-id}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - forgejo-net
+    environment:
+      USER_UID: ${USER_UID:-1000}
+      USER_GID: ${USER_GID:-1000}
+      FORGEJO__server__ROOT_URL: ${FORGEJO_ROOT_URL:-http://localhost:3000/}
+      FORGEJO__server__DOMAIN: ${FORGEJO_DOMAIN:-localhost}
+      FORGEJO__server__SSH_PORT: ${FORGEJO_SSH_PORT:-2222}
+      FORGEJO__server__SSH_LISTEN_PORT: 2222
+      FORGEJO__database__DB_TYPE: ${FORGEJO_DB_TYPE:-postgres}
+      FORGEJO__database__HOST: ${FORGEJO_DB_HOST:-db:5432}
+      FORGEJO__database__NAME: ${POSTGRES_DB:-forgejo}
+      FORGEJO__database__USER: ${POSTGRES_USER:-forgejo}
+      FORGEJO__database__PASSWD: ${POSTGRES_PASSWORD}
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__migrations__ALLOW_LOCALNETWORKS: "true"
+    volumes:
+      - ./data:/var/lib/gitea:Z
+      - /etc/localtime:/etc/localtime:ro
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    ports:
+      - "${FORGEJO_BIND_IP:-0.0.0.0}:${FORGEJO_HTTP_PORT:-3000}:3000"
+      - "${FORGEJO_SSH_BIND_IP:-0.0.0.0}:${FORGEJO_SSH_PORT:-2222}:2222"
