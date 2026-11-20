@@ -133,6 +133,7 @@ stop() {
     ebegin "Deteniendo stack de Forgejo ordenadamente (timeout: 30s)"
     _exec_cmd "podman-compose down --timeout 30"
     local rc=$?
+    _exec_cmd "podman rm -f forgejo-app forgejo-db 2>/dev/null || true"
 
     # Si había túnel SSH, detenerlo tras bajar los contenedores
     if [ -f "${FORGEJO_DIR}/.env" ]; then

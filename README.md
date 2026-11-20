@@ -49,6 +49,9 @@ cd forgejo-deploy
 # Estado detallado de los contenedores:
 ./manage.py status
 
+# Instalar el comando global 'forgejo' en el sistema (/usr/local/bin/forgejo):
+./manage.py install-cli
+
 # Corregir permisos de volúmenes si cambias de usuario:
 ./manage.py fix-permissions
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import os
+import pwd
 import shutil
 import subprocess
 import sys
@@ -99,22 +100,75 @@ def get_current_user() -> Tuple[str, int, int]:
     return user, uid, gid
 
 
+def get_service_user() -> str:
+    """Detecta el usuario de ejecución del servicio (desde /etc/conf.d/forgejo o .env)."""
+    conf_d = Path("/etc/conf.d/forgejo")
+    if conf_d.exists():
+        try:
+            for line in conf_d.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line.startswith("FORGEJO_USER="):
+                    user = line.split("=", 1)[1].strip().strip("'\"")
+                    if user:
+                        return user
+        except OSError:
+            pass
+
+    env = load_env()
+    if env.get("FORGEJO_SERVICE_USER"):
+        return env["FORGEJO_SERVICE_USER"]
+
+    for d in [BASE_DIR / "data", BASE_DIR / "postgres"]:
+        if d.exists():
+            try:
+                st = d.stat()
+                return pwd.getpwuid(st.st_uid).pw_name
+            except Exception:
+                pass
+
+    return getpass.getuser()
+
+
+def get_execution_cmd(cmd: List[str]) -> List[str]:
+    """Si el script se ejecuta como root pero el servicio pertenece a un usuario no privilegiado,
+    envuelve el comando con runuser para operar sobre su almacenamiento rootless de Podman."""
+    if os.geteuid() == 0:
+        svc_user = get_service_user()
+        if svc_user != "root":
+            try:
+                pw = pwd.getpwnam(svc_user)
+                runtime_dir = f"/run/user/{pw.pw_uid}"
+                if not Path(runtime_dir).exists():
+                    os.makedirs(runtime_dir, mode=0o700, exist_ok=True)
+                    shutil.chown(runtime_dir, user=svc_user, group=svc_user)
+                return [
+                    "runuser", "-u", svc_user, "--", "env",
+                    f"XDG_RUNTIME_DIR={runtime_dir}",
+                    f"HOME={pw.pw_dir}",
+                    f"USER={svc_user}",
+                ] + cmd
+            except (KeyError, OSError):
+                pass
+    return cmd
+
+
 def run_cmd(cmd: List[str], check: bool = True, capture: bool = False) -> subprocess.CompletedProcess[str]:
-    """Ejecuta un comando en el directorio base del proyecto."""
+    """Ejecuta un comando en el directorio base del proyecto con cambio transparente de usuario si aplica."""
+    exec_cmd = get_execution_cmd(cmd)
     try:
         return subprocess.run(
-            cmd,
+            exec_cmd,
             cwd=str(BASE_DIR),
             check=check,
             capture_output=capture,
             text=True,
         )
     except FileNotFoundError:
-        UI.err(f"Comando no encontrado en el sistema: '{cmd[0]}'")
+        UI.err(f"Comando no encontrado en el sistema: '{exec_cmd[0]}'")
         sys.exit(127)
     except subprocess.CalledProcessError as e:
         if not capture:
-            UI.err(f"El comando '{' '.join(cmd)}' falló con código de salida {e.returncode}")
+            UI.err(f"El comando '{' '.join(exec_cmd)}' falló con código de salida {e.returncode}")
         raise
 
 
@@ -139,31 +193,33 @@ def run_privileged(cmd: List[str]) -> bool:
 # SUBCOMANDOS OPERATIVOS
 # ==============================================================================
 def check_volume_permissions(auto_warn: bool = True) -> bool:
-    """Verifica si el usuario actual tiene acceso a data/ y postgres/."""
-    current_user, current_uid, _ = get_current_user()
+    """Verifica si el usuario del servicio tiene acceso a data/ y postgres/."""
+    svc_user = get_service_user()
+    try:
+        target_uid = pwd.getpwnam(svc_user).pw_uid
+    except Exception:
+        target_uid = os.geteuid()
+
     data_dir = BASE_DIR / "data"
     pg_dir = BASE_DIR / "postgres"
-
     issues: List[str] = []
 
     for d in [data_dir, pg_dir]:
         if not d.exists():
             continue
-        # Intentar comprobar lectura y ejecución
-        if not os.access(str(d), os.R_OK | os.W_OK | os.X_OK):
-            try:
-                st = d.stat()
-                owner_uid = st.st_uid
-                issues.append(f"{d.name}/ (Dueño UID: {owner_uid}, Tu UID: {current_uid})")
-            except OSError:
-                issues.append(f"{d.name}/ (Permiso denegado)")
+        try:
+            st = d.stat()
+            if os.geteuid() != 0 and st.st_uid != target_uid:
+                issues.append(f"{d.name}/ (Dueño UID: {st.st_uid}, Requerido UID: {target_uid} [{svc_user}])")
+        except OSError:
+            issues.append(f"{d.name}/ (Permiso denegado)")
 
     if issues:
         if auto_warn:
             UI.err("¡Conflicto de permisos detectado en los volúmenes!")
             for issue in issues:
                 print(f"    • {issue}")
-            UI.warn("El usuario actual no puede escribir en los datos. El arranque de Podman fallará.")
+            UI.warn("El servicio no podrá escribir en los datos. El arranque de Podman fallará.")
             UI.info("Para solucionarlo automáticamente ejecuta:")
             print(f"      {UI.BOLD}{UI.CYAN}./manage.py fix-permissions{UI.RESET}\n")
         return False
@@ -232,6 +288,9 @@ def cmd_start(args: argparse.Namespace) -> None:
 
     UI.info("Iniciando stack de Forgejo en Gentoo Linux...")
 
+    # Limpiar posibles contenedores en estado fallido previo
+    run_cmd(["podman", "rm", "-f", "forgejo-app", "forgejo-db"], check=False)
+
     # Túnel SSH si está habilitado
     if env.get("SSH_TUNNEL_ENABLED", "false").lower() == "true":
         tunnel_sh = SCRIPTS_DIR / "tunnel-db.sh"
@@ -260,8 +319,11 @@ def cmd_stop(args: argparse.Namespace) -> None:
         run_cmd(["podman-compose", "down", "--timeout", "30"])
         UI.ok("Stack de Forgejo detenido y recursos liberados.")
     except subprocess.CalledProcessError:
-        UI.err("Error al detener el stack.")
-        sys.exit(1)
+        UI.warn("podman-compose down reportó advertencias, forzando limpieza de contenedores...")
+        run_cmd(["podman", "rm", "-f", "forgejo-app", "forgejo-db"], check=False)
+
+    # Limpieza de seguridad
+    run_cmd(["podman", "rm", "-f", "forgejo-app", "forgejo-db"], check=False)
 
     if env.get("SSH_TUNNEL_ENABLED", "false").lower() == "true":
         tunnel_sh = SCRIPTS_DIR / "tunnel-db.sh"
@@ -291,14 +353,14 @@ def cmd_status(args: argparse.Namespace) -> None:
     db_mode = env.get("DB_MODE", "local")
     if db_mode == "local":
         UI.section("Salud de PostgreSQL Local")
-        res = subprocess.run(["podman", "ps", "--format", "{{.Names}}"], capture_output=True, text=True)
+        res = run_cmd(["podman", "ps", "--format", "{{.Names}}"], check=False, capture=True)
         if "forgejo-db" in res.stdout:
             pg_user = env.get("POSTGRES_USER", "forgejo")
             pg_db = env.get("POSTGRES_DB", "forgejo")
-            chk = subprocess.run(
+            chk = run_cmd(
                 ["podman", "exec", "-i", "forgejo-db", "pg_isready", "-U", pg_user, "-d", pg_db],
-                capture_output=True,
-                text=True,
+                check=False,
+                capture=True,
             )
             if chk.returncode == 0:
                 UI.ok("PostgreSQL respondiendo y listo para conexiones.")
@@ -362,8 +424,11 @@ def cmd_backup(args: argparse.Namespace) -> None:
         pg_user = env.get("POSTGRES_USER", "forgejo")
         pg_db = env.get("POSTGRES_DB", "forgejo")
         try:
+            pg_dump_cmd = get_execution_cmd(
+                ["podman", "exec", "-i", "forgejo-db", "pg_dump", "-U", pg_user, pg_db]
+            )
             dump_proc = subprocess.Popen(
-                ["podman", "exec", "-i", "forgejo-db", "pg_dump", "-U", pg_user, pg_db],
+                pg_dump_cmd,
                 stdout=subprocess.PIPE,
             )
             gzip_proc = subprocess.Popen(["gzip"], stdin=dump_proc.stdout, stdout=subprocess.PIPE)
@@ -427,7 +492,7 @@ def cmd_create_admin(args: argparse.Namespace) -> None:
         "--admin",
     ]
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        res = run_cmd(cmd, check=True, capture=True)
         UI.ok(f"Administrador '{username}' creado exitosamente.")
         print(f"  {res.stdout.strip()}")
     except subprocess.CalledProcessError as e:
@@ -450,7 +515,10 @@ def cmd_cli(args: argparse.Namespace) -> None:
         print("Ejemplo: ./manage.py cli -- help")
         sys.exit(1)
     cmd = ["podman", "exec", "-it", "forgejo-app", "forgejo"] + args.cli_args
-    subprocess.run(cmd)
+    try:
+        run_cmd(cmd, check=False)
+    except subprocess.CalledProcessError:
+        pass
 
 
 def cmd_doctor(args: argparse.Namespace) -> None:
@@ -517,7 +585,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                 UI.warn(f"Variable {var_name} no definida en .env.")
 
     # 6. Comprobar daemon de podman
-    pod_info = subprocess.run(["podman", "info", "--format", "{{.Host.Security.Rootless}}"], capture_output=True, text=True)
+    pod_info = run_cmd(["podman", "info", "--format", "{{.Host.Security.Rootless}}"], check=False, capture=True)
     if pod_info.returncode == 0:
         is_rootless = pod_info.stdout.strip().lower() == "true"
         UI.ok(f"Podman funcionando en modo: {'Rootless (100% Seguro y Aislado)' if is_rootless else 'Root'}")
@@ -525,6 +593,47 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         UI.err("Podman no responde adecuadamente a 'podman info'.")
 
     print("")
+
+
+def cmd_install_cli(args: argparse.Namespace) -> None:
+    """Instala el comando global 'forgejo' en /usr/local/bin/forgejo."""
+    target_path = Path("/usr/local/bin/forgejo")
+    manage_py = BASE_DIR / "manage.py"
+
+    script_content = f"""#!/usr/bin/env bash
+# ==============================================================================
+# /usr/local/bin/forgejo - CLI global de administración de Forgejo en Gentoo
+# ==============================================================================
+set -euo pipefail
+exec "{manage_py}" "$@"
+"""
+    UI.header("INSTALACIÓN DEL COMANDO GLOBAL 'forgejo'")
+    if os.geteuid() == 0:
+        try:
+            target_path.write_text(script_content, encoding="utf-8")
+            target_path.chmod(0o755)
+            UI.ok(f"Comando global instalado exitosamente en: {target_path}")
+            UI.info("Ahora puedes ejecutar desde cualquier lugar: 'forgejo status', 'forgejo logs', etc.")
+        except OSError as e:
+            UI.err(f"Error escribiendo en {target_path}: {e}")
+    else:
+        tmp_script = f"/tmp/forgejo_wrapper_{int(time.time())}.sh"
+        try:
+            Path(tmp_script).write_text(script_content, encoding="utf-8")
+            Path(tmp_script).chmod(0o755)
+            success = run_privileged(["cp", tmp_script, str(target_path)])
+            run_privileged(["chmod", "0755", str(target_path)])
+            try:
+                os.remove(tmp_script)
+            except OSError:
+                pass
+            if success:
+                UI.ok(f"Comando global instalado exitosamente en: {target_path}")
+                UI.info("Ahora puedes ejecutar desde cualquier lugar: 'forgejo status', 'forgejo logs', etc.")
+            else:
+                UI.err(f"No se pudo instalar en {target_path}. Requiere elevación de privilegios.")
+        except OSError as e:
+            UI.err(f"Error preparando instalador: {e}")
 
 
 def cmd_uninstall(args: argparse.Namespace) -> None:
@@ -586,6 +695,9 @@ def create_parser() -> argparse.ArgumentParser:
     p_cli = subparsers.add_parser("cli", help="Ejecuta comandos internos de la CLI de Forgejo dentro del contenedor")
     p_cli.add_argument("cli_args", nargs=argparse.REMAINDER, help="Argumentos pasados directamente al binario forgejo")
 
+    # install-cli
+    subparsers.add_parser("install-cli", help="Instala el comando global 'forgejo' en /usr/local/bin/forgejo")
+
     # uninstall / revert
     subparsers.add_parser("uninstall", help="Desinstala el servicio OpenRC y revierte la configuración")
     subparsers.add_parser("revert", help="Alias de uninstall")
@@ -594,6 +706,23 @@ def create_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    # Soporte para ejecutar comandos nativos de Forgejo como atajo:
+    # Si el usuario ejecuta: ./manage.py admin user list
+    # o ejecuta el wrapper global: forgejo admin user list
+    known_commands = {
+        "start", "stop", "restart", "status", "logs", "backup",
+        "create-admin", "upgrade", "fix-permissions", "doctor",
+        "cli", "install-cli", "uninstall", "revert", "-h", "--help",
+    }
+    if len(sys.argv) > 1 and sys.argv[1] not in known_commands and not sys.argv[1].startswith("-"):
+        cli_args = sys.argv[1:]
+        cmd = ["podman", "exec", "-it", "forgejo-app", "forgejo"] + cli_args
+        try:
+            res = run_cmd(cmd, check=False)
+            sys.exit(res.returncode)
+        except subprocess.CalledProcessError as e:
+            sys.exit(e.returncode)
+
     parser = create_parser()
 
     if len(sys.argv) == 1:
@@ -614,6 +743,7 @@ def main() -> None:
         "fix-permissions": cmd_fix_permissions,
         "doctor": cmd_doctor,
         "cli": cmd_cli,
+        "install-cli": cmd_install_cli,
         "uninstall": cmd_uninstall,
         "revert": cmd_uninstall,
     }

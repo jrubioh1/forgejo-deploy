@@ -518,16 +518,16 @@ def check_user_and_permissions(base_dir: Path) -> Tuple[int, int, str]:
                 import pwd
                 pw = pwd.getpwnam(caller_user)
                 uid, gid = pw.pw_uid, pw.pw_gid
-                userns_mode = "keep-id"
+                userns_mode = "keep-id:uid=1000,gid=1000"
                 UI.info(UI.t("user_info", user=caller_user, uid=uid, gid=gid))
             except Exception:
-                userns_mode = "keep-id"
+                userns_mode = "keep-id:uid=1000,gid=1000"
                 UI.ok(UI.t("root_ok", user="root"))
         else:
-            userns_mode = "keep-id"
+            userns_mode = "keep-id:uid=1000,gid=1000"
             UI.ok(UI.t("root_ok", user="root"))
     else:
-        userns_mode = "keep-id"
+        userns_mode = "keep-id:uid=1000,gid=1000"
         UI.info(UI.t("user_info", user=caller_user, uid=uid, gid=gid))
 
     for folder in ["data", "postgres"]:
@@ -987,6 +987,7 @@ FORGEJO_DOMAIN={domain}
 FORGEJO_ROOT_URL={root_url}
 
 # Usuario y Permisos / Container User
+FORGEJO_SERVICE_USER={service_user}
 USER_UID={service_uid}
 USER_GID={service_gid}
 USERNS_MODE={userns_mode}
