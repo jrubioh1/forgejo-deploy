@@ -26,6 +26,24 @@ STRINGS: Dict[str, Dict[str, str]] = {
         "sec_platform": "Plataforma de Origen",
         "opt_gitbucket": "GitBucket (Java/Jetty)",
         "prompt_platform": "Selecciona la plataforma a migrar [1]",
+        "scope_title": "QUÉ COMPONENTES SE MIGRAN Y CÓMO FUNCIONA",
+        "scope_p1": "1. Repositorios de Código Git (Disco Local - Offline)",
+        "scope_p1_desc": "   • Migra el árbol Git completo (commits, ramas, tags) vía 'git push --mirror'.\n   • 100% de solo lectura en GitBucket. No requiere que GitBucket esté encendido.",
+        "scope_p2": "2. Wikis de los Repositorios (.wiki.git) (Disco Local - Offline)",
+        "scope_p2_desc": "   • Preserva toda la documentación y páginas wiki asociadas a cada proyecto.",
+        "scope_p3": "3. Cuentas de Usuario Propietarios (Disco Local - Offline)",
+        "scope_p3_desc": "   • Crea en Forgejo las cuentas de los dueños de repositorios descubiertos.\n   • Genera contraseñas temporales aleatorias guardadas en credentials_report.csv (0600).\n   • Activa la directiva must_change_password para renovación en el primer login.",
+        "scope_p4": "4. Incidencias, Comentarios y Etiquetas (Vía API HTTP - Online)",
+        "scope_p4_desc": "   • Opcional: Requiere que GitBucket esté en ejecución (ej. http://127.0.0.1:8080).\n   • Consulta la API v3 compatible de GitBucket para transferir incidencias a Forgejo.",
+        "sec_mode": "Modalidad de Migración",
+        "prompt_mode": "Selecciona la modalidad de migración [1]",
+        "opt_mode_full": "Completa: Código Git + Wikis + Usuarios + Incidencias vía API",
+        "opt_mode_offline": "Esencial / Offline: Código Git + Wikis + Usuarios (100% Disco, Cero API)",
+        "opt_mode_custom": "Personalizada / Paso a paso: Elegir componentes y confirmar la API",
+        "mode_offline_notice": "Modo Offline seleccionado: GitBucket no necesita estar en ejecución. No se requerirán datos de red.",
+        "prompt_include_wikis": "¿Deseas migrar las wikis (.wiki.git)? [S/n]",
+        "prompt_include_issues": "¿Deseas conectar a la API de GitBucket para migrar Incidencias? [s/N]",
+        "prompt_confirm_api": "¿Confirmas la conexión a la API de GitBucket para migrar incidencias? [S/n]",
         "sec_gitbucket_config": "Configuración de la Migración desde GitBucket",
         "prompt_gb_dir": "Ruta al directorio de datos de GitBucket",
         "prompt_gb_running": "¿La aplicación GitBucket está actualmente en ejecución? [S/n]",
@@ -47,6 +65,24 @@ STRINGS: Dict[str, Dict[str, str]] = {
         "sec_platform": "Source Platform",
         "opt_gitbucket": "GitBucket (Java/Jetty)",
         "prompt_platform": "Select source platform to migrate [1]",
+        "scope_title": "WHAT COMPONENTS ARE MIGRATED AND HOW IT WORKS",
+        "scope_p1": "1. Git Code Repositories (Local Disk - Offline)",
+        "scope_p1_desc": "   • Migrates full Git history (commits, branches, tags) via 'git push --mirror'.\n   • 100% read-only on GitBucket. Does not require GitBucket to be running.",
+        "scope_p2": "2. Repository Wikis (.wiki.git) (Local Disk - Offline)",
+        "scope_p2_desc": "   • Preserves all wiki documentation and pages associated with each project.",
+        "scope_p3": "3. Repository Owner User Accounts (Local Disk - Offline)",
+        "scope_p3_desc": "   • Automatically creates Forgejo accounts for discovered repo owners.\n   • Generates random secure temp passwords saved to credentials_report.csv (0600).\n   • Enforces must_change_password on first user login.",
+        "scope_p4": "4. Issues, Comments & Labels (Via HTTP API - Online)",
+        "scope_p4_desc": "   • Optional: Requires GitBucket to be running (e.g. http://127.0.0.1:8080).\n   • Queries GitBucket's v3 API to transfer issues and discussions to Forgejo.",
+        "sec_mode": "Migration Scope Mode",
+        "prompt_mode": "Select migration mode [1]",
+        "opt_mode_full": "Full: Git Code + Wikis + Users + Issues via API",
+        "opt_mode_offline": "Essential / Offline: Git Code + Wikis + Users (100% Disk, Zero API)",
+        "opt_mode_custom": "Custom / Step-by-Step: Select components and confirm API",
+        "mode_offline_notice": "Offline mode selected: GitBucket does not need to be running. No network data needed.",
+        "prompt_include_wikis": "Do you want to migrate wikis (.wiki.git)? [Y/n]",
+        "prompt_include_issues": "Do you want to connect to GitBucket API to migrate Issues? [y/N]",
+        "prompt_confirm_api": "Do you confirm connecting to GitBucket API to migrate issues? [Y/n]",
         "sec_gitbucket_config": "GitBucket Migration Configuration",
         "prompt_gb_dir": "Path to GitBucket data directory",
         "prompt_gb_running": "Is the GitBucket application currently running? [Y/n]",
@@ -174,7 +210,43 @@ def detect_gitbucket_path() -> str:
     return str(Path.home() / ".gitbucket")
 
 
+def show_migration_scope_info() -> None:
+    """Muestra un panel informativo explicando qué componentes se migran y sus dependencias."""
+    title = UI.t("scope_title")
+    pad = max(2, 66 - len(title))
+    print(f"\n{UI.BOLD}{UI.CYAN}┌── {title} {'─' * pad}┐{UI.RESET}")
+    print(f" {UI.BOLD}{UI.GREEN}● {UI.t('scope_p1')}{UI.RESET}")
+    for line in UI.t("scope_p1_desc").splitlines():
+        print(f"   {UI.DIM}{line}{UI.RESET}")
+    print("")
+    print(f" {UI.BOLD}{UI.GREEN}● {UI.t('scope_p2')}{UI.RESET}")
+    for line in UI.t("scope_p2_desc").splitlines():
+        print(f"   {UI.DIM}{line}{UI.RESET}")
+    print("")
+    print(f" {UI.BOLD}{UI.GREEN}● {UI.t('scope_p3')}{UI.RESET}")
+    for line in UI.t("scope_p3_desc").splitlines():
+        print(f"   {UI.DIM}{line}{UI.RESET}")
+    print("")
+    print(f" {UI.BOLD}{UI.YELLOW}● {UI.t('scope_p4')}{UI.RESET}")
+    for line in UI.t("scope_p4_desc").splitlines():
+        print(f"   {UI.DIM}{line}{UI.RESET}")
+    print(f"{UI.BOLD}{UI.CYAN}└{'─' * 70}┘{UI.RESET}\n")
+
+
 def run_gitbucket_migration(base_dir: Path, env_defaults: Dict[str, str]) -> int:
+    # 1. Panel pedagógico de qué migra cada capa
+    show_migration_scope_info()
+
+    # 2. Selector de modalidad
+    UI.section(UI.t("sec_mode"))
+    print(f" {UI.CYAN}1){UI.RESET} {UI.BOLD}{UI.t('opt_mode_full')}{UI.RESET}")
+    print(f" {UI.CYAN}2){UI.RESET} {UI.BOLD}{UI.t('opt_mode_offline')}{UI.RESET}")
+    print(f" {UI.CYAN}3){UI.RESET} {UI.BOLD}{UI.t('opt_mode_custom')}{UI.RESET}")
+    UI.end_section()
+
+    mode_choice = UI.prompt(UI.t("prompt_mode"), default="1")
+
+    # 3. Configuración de rutas y Forgejo
     UI.section(UI.t("sec_gitbucket_config"))
 
     default_gb_dir = detect_gitbucket_path()
@@ -187,13 +259,39 @@ def run_gitbucket_migration(base_dir: Path, env_defaults: Dict[str, str]) -> int
     if not forgejo_token:
         forgejo_token = UI.prompt_password(UI.t("prompt_forgejo_token"))
 
-    # Comprobar si GitBucket está en ejecución para migrar incidencias
-    gb_running = UI.prompt(UI.t("prompt_gb_running"), default="S" if UI.lang == "es" else "Y").lower()
+    # 4. Parámetros según la modalidad seleccionada
+    skip_wikis = False
+    skip_issues = False
     gb_url = ""
     gb_token = ""
-    if gb_running.startswith("s") or gb_running.startswith("y"):
-        gb_url = UI.prompt(UI.t("prompt_gb_url"), default="http://127.0.0.1:8080/gitbucket")
-        gb_token = UI.prompt(UI.t("prompt_gb_token"), default="")
+
+    if mode_choice == "2":
+        # Modo Esencial / Offline: Cero API de red, 100% disco local
+        skip_issues = True
+        UI.info(UI.t("mode_offline_notice"))
+    elif mode_choice == "3":
+        # Modo Personalizado / Paso a paso
+        inc_wikis = UI.prompt(UI.t("prompt_include_wikis"), default="S" if UI.lang == "es" else "Y").lower()
+        skip_wikis = not (inc_wikis.startswith("s") or inc_wikis.startswith("y"))
+
+        inc_issues = UI.prompt(UI.t("prompt_include_issues"), default="N").lower()
+        if inc_issues.startswith("s") or inc_issues.startswith("y"):
+            confirm_api = UI.prompt(UI.t("prompt_confirm_api"), default="S" if UI.lang == "es" else "Y").lower()
+            if confirm_api.startswith("s") or confirm_api.startswith("y"):
+                gb_url = UI.prompt(UI.t("prompt_gb_url"), default="http://127.0.0.1:8080/gitbucket")
+                gb_token = UI.prompt(UI.t("prompt_gb_token"), default="")
+            else:
+                skip_issues = True
+        else:
+            skip_issues = True
+    else:
+        # Modo Completo (por defecto)
+        gb_running = UI.prompt(UI.t("prompt_gb_running"), default="S" if UI.lang == "es" else "Y").lower()
+        if gb_running.startswith("s") or gb_running.startswith("y"):
+            gb_url = UI.prompt(UI.t("prompt_gb_url"), default="http://127.0.0.1:8080/gitbucket")
+            gb_token = UI.prompt(UI.t("prompt_gb_token"), default="")
+        else:
+            skip_issues = True
 
     # Preguntar si simulación
     dry_run = UI.prompt(UI.t("prompt_dry_run"), default="S" if UI.lang == "es" else "Y").lower()
@@ -205,7 +303,7 @@ def run_gitbucket_migration(base_dir: Path, env_defaults: Dict[str, str]) -> int
         UI.err(UI.t("token_required_err"))
         return 1
 
-    # Construir comando
+    # Construir comando hacia scripts/migrate_gitbucket.py
     cmd = [
         sys.executable,
         str(base_dir / "scripts" / "migrate_gitbucket.py"),
@@ -217,15 +315,20 @@ def run_gitbucket_migration(base_dir: Path, env_defaults: Dict[str, str]) -> int
         forgejo_token or "dry_run_token",
     ]
 
+    if skip_wikis:
+        cmd.append("--skip-wikis")
+    if skip_issues:
+        cmd.append("--skip-issues")
+
     if is_dry_run:
         cmd.append("--dry-run")
         UI.warn(UI.t("sim_notice"))
     else:
         UI.info(UI.t("live_notice"))
 
-    if gb_url:
+    if gb_url and not skip_issues:
         cmd.extend(["--gitbucket-url", gb_url])
-    if gb_token:
+    if gb_token and not skip_issues:
         cmd.extend(["--gitbucket-token", gb_token])
 
     print("")
